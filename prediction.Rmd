@@ -8,7 +8,9 @@ output: html_document
 Download data:
 
 ```{r}
-require( randomForest )
+library( randomForest )
+library( dplyr )
+
 if( !file.exists( 'data' ) )
 {
   dir.create( 'data' )
@@ -25,18 +27,78 @@ if( !file.exists( 'data/pml-testing.csv' ) )
 }
 train <- read.csv( 'data/pml-training.csv', na.strings=c( '#DIV/0!', 'NA' ) )
 test <- read.csv( 'data/pml-testing.csv', na.strings=c( '#DIV/0!', 'NA' ) )
+train$user_name <- factor( train$user_name )
+test$user_name <- factor( test$user_name )
 
-candidate_columns <- colSums( is.na( test ) ) == 0
+# imputation?
+new_window_train <- filter( train, new_window == 'yes' )
+new_window_candidate_columns <- colSums( is.na( new_window_train ) ) == 0
+new_window_candidate_columns[ c( 'X', 'raw_timestamp_part_1',
+                                 'raw_timestamp_part_2', 'cvtd_timestamp',
+                                 'new_window' ) ] <- FALSE
+rownames( new_window_train ) <-
+  paste( new_window_train$user_name, new_window_train$num_window, sep='_' )
+
+rollup_windows <- function( data_frame )
+{
+  function( column_name )
+  {
+    column <- data_frame[ , column_name ]
+    if( sum( is.na( column ) ) == 0 )
+    {
+      return( column )
+    }
+    else
+    {
+      impute <- function( user_name, num_window, original_value )
+      {
+        if( is.na( original_value ) )
+        {
+          return( new_window_train[ paste( user_name, num_window, sep='_' ),
+                                    column_name ] )
+        }
+        else
+        {
+          return( original_value )
+        }
+      }
+      return( mapply( impute, data_frame$user_name, data_frame$num_window,
+                      column ) )
+    }
+  }
+}
+middle_train <-
+  sapply( colnames( train )[ 4:length( train ) - 1 ], rollup_windows( train ) )
+imputed_train <-
+  cbind( train[ , 1:3 ], middle_train, classe=train$classe )
+#summary( imputed_train )
+
+middle_test <-
+  sapply( colnames( test )[ 4:length( test ) - 1 ], rollup_windows( test ) )
+imputed_test <-
+  cbind( test[ , 1:3 ], middle_test, problem_id=test$problem_id )
+#summary( imputed_test )
+
+candidate_columns <- colSums( is.na( imputed_test ) ) == 0
 # if we want to generalise to other users, we should exclude user_name
 # if we want to consider time series data, we should include timestamps
 # new_window is iffy, there is no variation in the test data
-candidate_columns[ c( 'X', 'user_name', 'raw_timestamp_part_1',
-                      'raw_timestamp_part_2', 'cvtd_timestamp',
-                      'new_window' ) ] <- FALSE
+candidate_columns[ c( 'X', 'raw_timestamp_part_1', 'raw_timestamp_part_2',
+                      'cvtd_timestamp', 'new_window' ) ] <- FALSE
 
-modified_train <- train[ , candidate_columns ]
+modified_train <- imputed_train[ , candidate_columns ]
 fit <- randomForest( classe ~ ., data=modified_train )
+answers <- predict( fit, test )
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files( answers )
 
+# w/o user_name
 #Call:
 # randomForest(formula = classe ~ ., data = modified_train) 
 #               Type of random forest: classification
@@ -51,4 +113,36 @@ fit <- randomForest( classe ~ ., data=modified_train )
 #C    0    6 3416    0    0 0.0017533606
 #D    0    0   13 3202    1 0.0043532338
 #E    0    0    0    5 3602 0.0013861935
+
+# w/ user_name
+#Call:
+# randomForest(formula = classe ~ ., data = modified_train) 
+#               Type of random forest: classification
+#                     Number of trees: 500
+#No. of variables tried at each split: 7
+
+#        OOB estimate of  error rate: 0.14%
+#Confusion matrix:
+#     A    B    C    D    E class.error
+#A 5580    0    0    0    0 0.000000000
+#B    4 3793    0    0    0 0.001053463
+#C    0    7 3415    0    0 0.002045587
+#D    0    0   11 3204    1 0.003731343
+#E    0    0    0    4 3603 0.001108955
+
+# w/ lookup table-based imputation
+#Call:
+# randomForest(formula = classe ~ ., data = modified_train) 
+#               Type of random forest: classification
+#                     Number of trees: 500
+#No. of variables tried at each split: 7
+
+#        OOB estimate of  error rate: 0.06%
+#Confusion matrix:
+#     A    B    C    D    E  class.error
+#A 5580    0    0    0    0 0.0000000000
+#B    1 3796    0    0    0 0.0002633658
+#C    0    6 3416    0    0 0.0017533606
+#D    0    0    3 3212    1 0.0012437811
+#E    0    0    0    1 3606 0.0002772387
 ```
