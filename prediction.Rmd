@@ -26,16 +26,29 @@ if( !file.exists( 'data/pml-testing.csv' ) )
 train <- read.csv( 'data/pml-training.csv', na.strings=c( '#DIV/0!', 'NA' ) )
 test <- read.csv( 'data/pml-testing.csv', na.strings=c( '#DIV/0!', 'NA' ) )
 
-#fit <-
-#  glm( classe ~ . - X - user_name - raw_timestamp_part_1 -
-#         raw_timestamp_part_2 - cvtd_timestamp - kurtosis_yaw_belt -
-#         skewness_yaw_belt - kurtosis_yaw_dumbbell - skewness_yaw_dumbbell -
-#         kurtosis_yaw_forearm - skewness_yaw_forearm - amplitude_yaw_dumbbell,
-#       data=train )
-fit <-
-  randomForest( classe ~ . - X - user_name - raw_timestamp_part_1 -
-         raw_timestamp_part_2 - cvtd_timestamp - kurtosis_yaw_belt -
-         skewness_yaw_belt - kurtosis_yaw_dumbbell - skewness_yaw_dumbbell -
-         kurtosis_yaw_forearm - skewness_yaw_forearm - amplitude_yaw_dumbbell,
-       data=train )
+candidate_columns <- colSums( is.na( test ) ) == 0
+# if we want to generalise to other users, we should exclude user_name
+# if we want to consider time series data, we should include timestamps
+# new_window is iffy, there is no variation in the test data
+candidate_columns[ c( 'X', 'user_name', 'raw_timestamp_part_1',
+                      'raw_timestamp_part_2', 'cvtd_timestamp',
+                      'new_window' ) ] <- FALSE
+
+modified_train <- train[ , candidate_columns ]
+fit <- randomForest( classe ~ ., data=modified_train )
+
+#Call:
+# randomForest(formula = classe ~ ., data = modified_train) 
+#               Type of random forest: classification
+#                     Number of trees: 500
+#No. of variables tried at each split: 7
+
+#        OOB estimate of  error rate: 0.15%
+#Confusion matrix:
+#     A    B    C    D    E  class.error
+#A 5579    1    0    0    0 0.0001792115
+#B    3 3793    1    0    0 0.0010534633
+#C    0    6 3416    0    0 0.0017533606
+#D    0    0   13 3202    1 0.0043532338
+#E    0    0    0    5 3602 0.0013861935
 ```
