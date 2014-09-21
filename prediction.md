@@ -1,12 +1,6 @@
----
-title: "Weight Lifting Exercise Data Prediction"
-author: "Carlos Macasaet"
-date: "21 September 2014"
-output:
-  html_document:
-    keep_md: yes
-    toc: yes
----
+# Weight Lifting Exercise Data Prediction
+Carlos Macasaet  
+21 September 2014  
 
 # Summary
 
@@ -16,12 +10,14 @@ not, which of four common mistakes the subject is making. This study is based on
 the [Human Activity Recognition](http://groupware.les.inf.puc-rio.br/har)
 project.
 
-```{r message=FALSE, fig.cap='Defining libraries to use'}
+
+```r
 library( randomForest )
 library( dplyr )
 ```
 
-```{r fig.cap='Retrieving the data'}
+
+```r
 if( !file.exists( 'data' ) )
 {
   dir.create( 'data' )
@@ -43,7 +39,8 @@ if( !file.exists( 'data/pml-testing.csv' ) )
 The predefined testing and training sets represent missing values in various
 ways. I account for that when reading the files.
 
-```{r fig.cap='Reading the files'}
+
+```r
 train <- read.csv( 'data/pml-training.csv', na.strings=c( '#DIV/0!', 'NA' ) )
 test <- read.csv( 'data/pml-testing.csv', na.strings=c( '#DIV/0!', 'NA' ) )
 train$user_name <- factor( train$user_name )
@@ -124,7 +121,8 @@ fill in missing values on both the training and test sets.
 
 #### Build Lookup Table
 
-```{r}
+
+```r
 new_window_train <- filter( train, new_window == 'yes' )
 new_window_candidate_columns <- colSums( is.na( new_window_train ) ) == 0
 new_window_candidate_columns[ c( 'X', 'raw_timestamp_part_1',
@@ -136,7 +134,8 @@ rownames( new_window_train ) <-
 
 #### Roll Up Missing Values to the Window Level
 
-```{r}
+
+```r
 rollup_windows <- function( data_frame )
 {
   function( column_name )
@@ -182,7 +181,8 @@ candidate_columns[ c( 'X', 'raw_timestamp_part_1', 'raw_timestamp_part_2',
 modified_train <- imputed_train[ , candidate_columns ]
 ```
 
-```{r cache=TRUE}
+
+```r
 fit <- randomForest( classe ~ ., data=modified_train )
 ```
 
@@ -194,38 +194,27 @@ of Bag estimate is an unbiased estimate of the Out of Sample Error. In fact,
 when evaluated against the 20 test records, the model correctly predicted the
 biceps curl classes for all of them.
 
-```{r}
+
+```r
 fit
 ```
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-answers <- predict( fit, test )
-pml_write_files = function(x){
-  n = length(x)
-  for(i in 1:n){
-    filename = paste0("problem_id_",i,".txt")
-    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
-  }
-}
-pml_write_files( answers )
-
-
-
-
-
-# w/ lookup table-based imputation
-#Call:
-# randomForest(formula = classe ~ ., data = modified_train) 
-#               Type of random forest: classification
-#                     Number of trees: 500
-#No. of variables tried at each split: 7
-
-#        OOB estimate of  error rate: 0.06%
-#Confusion matrix:
-#     A    B    C    D    E  class.error
-#A 5580    0    0    0    0 0.0000000000
-#B    1 3796    0    0    0 0.0002633658
-#C    0    6 3416    0    0 0.0017533606
-#D    0    0    3 3212    1 0.0012437811
-#E    0    0    0    1 3606 0.0002772387
 ```
+## 
+## Call:
+##  randomForest(formula = classe ~ ., data = modified_train) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 7
+## 
+##         OOB estimate of  error rate: 0.05%
+## Confusion matrix:
+##      A    B    C    D    E class.error
+## A 5580    0    0    0    0   0.0000000
+## B    2 3795    0    0    0   0.0005267
+## C    0    4 3418    0    0   0.0011689
+## D    0    0    2 3213    1   0.0009328
+## E    0    0    0    1 3606   0.0002772
+```
+
+
